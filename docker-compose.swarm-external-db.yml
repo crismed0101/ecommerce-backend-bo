@@ -1,0 +1,60 @@
+version: "3.7"
+
+services:
+  # FastAPI Backend - Conecta a PostgreSQL externo
+  backend:
+    image: crismed0101/ecommerce-backend:latest
+    networks:
+      - network_public
+    environment:
+      # OPCIÓN 1: Si PostgreSQL está en contenedor Docker
+      # Reemplaza 'postgres_container' con el nombre real de tu contenedor
+      # DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres_container:5432/ecommerce_bo
+
+      # OPCIÓN 2: Si PostgreSQL está instalado directo en el servidor
+      # Usa la IP del host Docker (gateway)
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@host.docker.internal:5432/ecommerce_bo
+
+      # OPCIÓN 3: Si PostgreSQL está en otro servidor
+      # Usa la IP específica del servidor PostgreSQL
+      # DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@192.168.1.100:5432/ecommerce_bo
+
+      # Variables de la aplicación
+      - APP_NAME=E-commerce Backend
+      - APP_VERSION=1.0.0
+      - DEBUG=False
+      - SECRET_KEY=${SECRET_KEY}
+      - SHOPIFY_WEBHOOK_SECRET=${SHOPIFY_WEBHOOK_SECRET}
+      - ALLOWED_ORIGINS=https://ecom-app.bytebase.my
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.ecommerce.rule=Host(`ecom-app.bytebase.my`)"
+        - "traefik.http.routers.ecommerce.entrypoints=websecure"
+        - "traefik.http.routers.ecommerce.priority=1"
+        - "traefik.http.routers.ecommerce.tls.certresolver=letsencryptresolver"
+        - "traefik.http.services.ecommerce.loadbalancer.server.port=8000"
+        - "traefik.http.routers.ecommerce.service=ecommerce"
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2048M
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  network_public:
+    external: true
+    name: network_public
