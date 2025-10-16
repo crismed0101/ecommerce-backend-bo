@@ -150,8 +150,31 @@ async def startup_event():
             conn.commit()
 
         logger.info("📊 Verificando/creando tablas en la base de datos...")
-        Base.metadata.create_all(bind=engine)
-        logger.info("✅ Schemas y tablas verificadas/creadas exitosamente")
+
+        # Crear tablas con manejo de errores por tabla individual
+        from sqlalchemy import inspect
+        inspector = inspect(engine)
+
+        tables_created = 0
+        tables_failed = 0
+
+        for table in Base.metadata.sorted_tables:
+            try:
+                # Verificar si la tabla ya existe
+                if not inspector.has_table(table.name, schema=table.schema):
+                    # Intentar crear la tabla
+                    table.create(bind=engine, checkfirst=False)
+                    tables_created += 1
+                    logger.info(f"  ✓ Tabla '{table.schema}.{table.name}' creada")
+                else:
+                    logger.info(f"  → Tabla '{table.schema}.{table.name}' ya existe")
+            except Exception as e:
+                tables_failed += 1
+                logger.warning(f"  ⚠️ Error al crear tabla '{table.schema}.{table.name}': {str(e)[:100]}")
+                # Continuar con la siguiente tabla
+                continue
+
+        logger.info(f"✅ Proceso completado: {tables_created} creadas, {tables_failed} con errores")
     except Exception as e:
         logger.error(f"❌ Error al crear schemas/tablas: {e}")
         raise
