@@ -37,6 +37,7 @@ docs/
 # Scripts
 *.sh
 *.bat
+scripts/
 activate_*.py
 fix_*.py
 test_*.py
