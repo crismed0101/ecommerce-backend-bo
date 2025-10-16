@@ -1,0 +1,24 @@
+{
+  "customer": {
+    "full_name": "Juan Pérez TEST",
+    "phone": "70123456",
+    "email": "juan.test@example.com",
+    "department": "LA PAZ",
+    "address": "Zona Sur Calle 21 #456",
+    "reference": "Edificio Azul, piso 3"
+  },
+  "items": [
+    {
+      "product_name": "Chompa Roja TEST",
+      "sku": "CHOMPTEST-001",
+      "quantity": 2,
+      "unit_price": 150.00
+    }
+  ],
+  "total": 300.00,
+  "currency": "BOB",
+  "external_order_id": "TEST-ORDER-001",
+  "utm_source": "facebook",
+  "utm_campaign": "prueba_sistema",
+  "notes": "Orden de prueba para validar sistema"
+}
