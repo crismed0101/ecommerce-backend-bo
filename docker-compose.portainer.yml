@@ -1,0 +1,100 @@
+# ============================================
+# Docker Compose Stack para Portainer
+# ============================================
+# Este archivo está optimizado para usar en Portainer con:
+# - Imagen desde Docker Hub (devmed01/ecommerce-backend)
+# - PostgreSQL externo (ya existente en tu servidor)
+# - Traefik para routing y SSL automático
+# - Red overlay: network_public
+
+version: "3.8"
+
+services:
+  backend:
+    # Imagen desde Docker Hub (construida por GitHub Actions)
+    image: devmed01/ecommerce-backend:latest
+
+    # Red compartida con Traefik y PostgreSQL
+    networks:
+      - network_public
+
+    # Variables de entorno
+    environment:
+      # Conexión a PostgreSQL existente
+      # Usa el alias "postgres" en network_public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/ecom-app_db
+
+      # Configuración de la aplicación
+      APP_NAME: E-commerce Backend
+      APP_VERSION: 1.0.0
+      DEBUG: "False"
+
+      # Seguridad
+      SECRET_KEY: ${SECRET_KEY}
+      SHOPIFY_WEBHOOK_SECRET: ${SHOPIFY_WEBHOOK_SECRET:-changeme}
+
+      # CORS - Orígenes permitidos
+      ALLOWED_ORIGINS: https://ecom-app.bytebase.my,https://admin.bytebase.my
+
+    # Configuración de deployment para Docker Swarm
+    deploy:
+      mode: replicated
+      replicas: 1
+
+      # Solo en nodos manager
+      placement:
+        constraints:
+          - node.role == manager
+
+      # Labels de Traefik para routing automático
+      labels:
+        # Habilitar Traefik
+        - "traefik.enable=true"
+
+        # Router HTTP
+        - "traefik.http.routers.ecommerce-backend.rule=Host(`ecom-app.bytebase.my`)"
+        - "traefik.http.routers.ecommerce-backend.entrypoints=websecure"
+        - "traefik.http.routers.ecommerce-backend.tls.certresolver=letsencryptresolver"
+
+        # Service
+        - "traefik.http.services.ecommerce-backend.loadbalancer.server.port=8000"
+
+        # Middlewares (opcional - descomenta si necesitas)
+        # - "traefik.http.routers.ecommerce-backend.middlewares=rate-limit@file"
+
+      # Recursos del contenedor
+      resources:
+        limits:
+          cpus: "1.0"      # Máximo 1 CPU
+          memory: 1024M    # Máximo 1GB RAM
+        reservations:
+          cpus: "0.25"     # Mínimo 0.25 CPU
+          memory: 256M     # Mínimo 256MB RAM
+
+      # Política de restart
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+
+      # Estrategia de actualización
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        order: start-first
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+# Red externa (ya existe en tu servidor)
+networks:
+  network_public:
+    external: true
+    name: network_public
