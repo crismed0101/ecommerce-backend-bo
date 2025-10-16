@@ -1,57 +1,77 @@
-name: Deploy to Production
+# ===========================================
+# GitHub Actions - CI/CD Pipeline
+# ===========================================
+# Este workflow se ejecuta automáticamente cuando haces "git push" a la rama "main"
+# Construye una imagen Docker y la sube a Docker Hub
 
+name: Build and Push to Docker Hub
+
+# TRIGGER: Cuándo se ejecuta este workflow
 on:
   push:
     branches:
-      - main
-  workflow_dispatch:  # Allow manual trigger
+      - main  # Solo cuando subes código a la rama "main"
+  workflow_dispatch:  # También permite ejecutarlo manualmente desde GitHub
 
+# JOBS: Las tareas que se van a ejecutar
 jobs:
-  deploy:
-    runs-on: ubuntu-latest
+  build-and-push:
+    name: Build Docker Image and Push to Docker Hub
+    runs-on: ubuntu-latest  # Usa una máquina virtual Ubuntu de GitHub
 
     steps:
+      # PASO 1: Descargar tu código desde GitHub
       - name: Checkout code
         uses: actions/checkout@v4
+        # Esto es como hacer "git clone" de tu repositorio
 
+      # PASO 2: Configurar Docker Buildx (herramienta avanzada de Docker)
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        # Buildx permite construir imágenes más eficientemente
 
-      - name: Login to Docker Hub (optional)
+      # PASO 3: Login a Docker Hub
+      - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-        continue-on-error: true  # Skip if not configured
+          username: ${{ secrets.DOCKER_USERNAME }}  # Tu usuario de Docker Hub (configuraremos esto)
+          password: ${{ secrets.DOCKER_TOKEN }}      # Tu token de Docker Hub (configuraremos esto)
+        # Esto es como hacer "docker login" desde la terminal
 
-      - name: Build Docker image
-        run: |
-          docker build -t ecommerce-backend:${{ github.sha }} .
-          docker tag ecommerce-backend:${{ github.sha }} ecommerce-backend:latest
-
-      - name: Deploy to server via SSH
-        uses: appleboy/ssh-action@master
+      # PASO 4: Extraer metadata (versión, tags, etc.)
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
         with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.SERVER_PORT }}
-          script: |
-            cd /path/to/app  # Update this path
-            git pull origin main
-            docker-compose down
-            docker-compose up -d --build
-            docker-compose ps
+          images: ${{ secrets.DOCKER_USERNAME }}/ecommerce-backend
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix={{branch}}-
+        # Crea tags para tu imagen (latest, y un tag con el commit hash)
 
-      - name: Health check
-        run: |
-          sleep 10
-          curl -f http://${{ secrets.SERVER_HOST }}/health || exit 1
+      # PASO 5: Construir y subir la imagen a Docker Hub
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .              # Usa el directorio actual
+          file: ./Dockerfile      # Usa este Dockerfile
+          push: true              # Sube la imagen a Docker Hub
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/ecommerce-backend:latest
+          cache-to: type=inline
+        # Esto construye tu imagen Docker y la sube a Docker Hub automáticamente
 
-      - name: Notify success
+      # PASO 6: Notificación de éxito
+      - name: Deployment summary
         if: success()
-        run: echo "Deployment successful!"
+        run: |
+          echo "✅ Build completado exitosamente!"
+          echo "📦 Imagen disponible en: ${{ secrets.DOCKER_USERNAME }}/ecommerce-backend:latest"
+          echo "🚀 Ahora puedes actualizar tu stack en Portainer"
 
+      # PASO 7: Notificación de error
       - name: Notify failure
         if: failure()
-        run: echo "Deployment failed!"
+        run: |
+          echo "❌ Build falló. Revisa los logs arriba para ver el error."
