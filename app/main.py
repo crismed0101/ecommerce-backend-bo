@@ -132,17 +132,28 @@ async def startup_event():
     logger.info(f"🚀 {settings.APP_NAME} v{settings.APP_VERSION} iniciando...")
     logger.info(f"📚 Documentación: http://localhost:8000/docs")
 
-    # Crear tablas en la base de datos si no existen
+    # Crear schemas y tablas en la base de datos si no existen
     try:
         from app.core.database import engine, Base
+        from sqlalchemy import text
         # Importar todos los modelos para que SQLAlchemy los conozca
         import app.models  # noqa: F401
 
+        logger.info("📊 Verificando/creando schemas en la base de datos...")
+
+        # Crear los schemas si no existen
+        schemas = ['operations', 'product', 'finance', 'marketing']
+        with engine.connect() as conn:
+            for schema in schemas:
+                conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema}"))
+                logger.info(f"  ✓ Schema '{schema}' verificado/creado")
+            conn.commit()
+
         logger.info("📊 Verificando/creando tablas en la base de datos...")
         Base.metadata.create_all(bind=engine)
-        logger.info("✅ Tablas verificadas/creadas exitosamente")
+        logger.info("✅ Schemas y tablas verificadas/creadas exitosamente")
     except Exception as e:
-        logger.error(f"❌ Error al crear tablas: {e}")
+        logger.error(f"❌ Error al crear schemas/tablas: {e}")
         raise
 
     # Configurar event listeners (reemplaza triggers de BD)
